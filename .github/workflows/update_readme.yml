@@ -1,8 +1,9 @@
 name: Update README with Issues
 
 on:
-  issues:
-    types: [opened, edited, closed]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */4 * * *'
 
 jobs:
   update-readme:
