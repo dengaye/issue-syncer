@@ -1,9 +1,9 @@
 name: Update README with Issues
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 */4 * * *'
+    - cron: '0 0 * * *'  # 每天凌晨 0 点运行
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
   update-readme:
@@ -11,26 +11,60 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v2
+    - name: Set up Python
+      uses: actions/setup-python@v4
       with:
-        node-version: '14'
+        python-version: '3.9'
 
     - name: Install dependencies
-      run: npm install axios
-
-    - name: Update README
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        node updateReadme.js
+        pip install requests
+
+    - name: Fetch Issues and Update README
+      run: |
+        python -c '
+        import requests
+        import os
+
+        # GitHub API token
+        token = os.getenv("ISSUSE_TOKEN")
+
+        # Repository information
+        owner = os.getenv("GIT_USERNAME")
+        repo = os.getenv("REPO_NAME")
+
+        # API URL to fetch issues
+        url = f"https://api.github.com/repos/{owner}/{repo}/issues"
+
+        # Headers for API request
+        headers = {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+
+        # Fetch issues
+        response = requests.get(url, headers=headers)
+        issues = response.json()
+
+        # Generate README content
+        readme_content = "# 列表\n\n"
+        for issue in issues:
+            title = issue["title"]
+            number = issue["number"]
+            url = issue["html_url"]
+            readme_content += f"- [{title}]({url}) (# {number})\n"
+
+        # Write to README.md
+        with open("README.md", "w") as f:
+            f.write(readme_content)
+        '
 
     - name: Commit changes
       run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
         git add README.md
-        git commit -m "Update README with latest issues" || echo "No changes to commit"
+        git commit -m "Update README with issue information" || echo "No changes to commit"
         git push
