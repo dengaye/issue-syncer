@@ -10,61 +10,51 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
+    - name: Checkout this repository
       uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
       with:
-        python-version: '3.9'
+        node-version: '14'
 
     - name: Install dependencies
       run: |
-        pip install requests
+        npm install axios
 
     - name: Fetch Issues and Update README
+      env:
+        ISSUSE_TOKEN: ${{ secrets.ISSUSE_TOKEN }}
+        GIT_USERNAME: ${{ secrets.GIT_USERNAME }}
+        REPO_NAMES: ${{ secrets.REPO_NAMES }}
       run: |
-        python -c '
-        import requests
-        import os
+        node fetch-issue.js
 
-        # GitHub API token
-        token = os.getenv("ISSUSE_TOKEN")
-
-        # Repository information
-        owner = os.getenv("GIT_USERNAME")
-        repo = os.getenv("REPO_NAME")
-
-        # API URL to fetch issues
-        url = f"https://api.github.com/repos/{owner}/{repo}/issues"
-
-        # Headers for API request
-        headers = {
-            "Authorization": f"token {token}",
-            "Accept": "application/vnd.github.v3+json"
-        }
-
-        # Fetch issues
-        response = requests.get(url, headers=headers)
-        issues = response.json()
-
-        # Generate README content
-        readme_content = "# 列表\n\n"
-        for issue in issues:
-            title = issue["title"]
-            number = issue["number"]
-            url = issue["html_url"]
-            readme_content += f"- [{title}]({url}) (# {number})\n"
-
-        # Write to README.md
-        with open("README.md", "w") as f:
-            f.write(readme_content)
-        '
-
-    - name: Commit changes
+    - name: Update target repositories
+      env:
+        GIT_USERNAME: ${{ secrets.GIT_USERNAME }}
+        ISSUSE_TOKEN: ${{ secrets.ISSUSE_TOKEN }}
+        REPO_NAMES: ${{ secrets.REPO_NAMES }}
       run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add README.md
-        git commit -m "Update README with issue information" || echo "No changes to commit"
-        git push
+        IFS=';' read -r -a repoArray <<< "$REPO_NAMES"
+        for repo in "${repoArray[@]}"
+        do
+          echo "Updating $repo"
+
+          # Use the same temporary directory
+          git clone https://$GIT_USERNAME:$ISSUSE_TOKEN@github.com/$GIT_USERNAME/$repo.git $repo
+          
+          # Copy the updated README.md from the temporary directory to the cloned repository
+          cp ${repo}_README.md $repo/README.md
+          
+          # Commit and push changes in the target repository
+          cd $repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "Update README with issue information" || echo "No changes to commit"
+          git push
+
+          # Return to the previous directory and continue
+          cd -
+        done
