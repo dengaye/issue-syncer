@@ -3,8 +3,8 @@ const fs = require("fs");
 const https = require("https");
 const path = require("path");
 
-const icons = ["✂️", "🌱", "👯", "❄️", "📫", "🎅", "🍁", "🛀", "🍃", "🎃"	, "👻"];
-const defaultIcon =  "🔆";
+const icons = ["✂️", "🌱", "👯", "❄️", "📫", "🎅", "🍁", "🛀", "🍃", "🎃", "👻"];
+const defaultIcon = "🔆";
 let usedLabels = new Map();
 
 const token = process.env.ISSUSE_TOKEN;
@@ -26,33 +26,40 @@ async function updateReadme(repoPath) {
 
   const readmePath = path.join(__dirname, `${repoPath}_README.md`);
 
-  let readmeContent = `# ${repoPath}\n`;
+  let readmeContent = `# ${repoPath} 📖\n`;
+  readmeContent += `### Issue Summary\n`;
+  readmeContent += `- Total Issues: ${issues.length} 📝\n`;
+  readmeContent += `- Unlabeled Issues: ${issues.filter(issue => !issue.labels?.length).length} ❓\n\n`;
 
   let issuesByLabel = {};
 
   for (const issue of issues) {
+    if (!issue.labels?.length) {
+      issuesByLabel.default = issuesByLabel.default || [];
+      issuesByLabel.default.push(issue);
+      continue;
+    }
     for (const label of issue.labels) {
       const labelName = label.name;
       if (issuesByLabel[labelName]) {
         issuesByLabel[labelName].push(issue);
       } else {
-        issuesByLabel[labelName] = [issue]
+        issuesByLabel[labelName] = [issue];
       }
     }
   }
 
-  for (const [label, labelIssues] of Object.entries(issuesByLabel)) {
-    readmeContent += `## ${label}\n`;
+  const sortedLabels = Object.keys(issuesByLabel).sort();
 
-    for (const issue of labelIssues) {
-    readmeContent += createIssueItem(issue);
-    readmeContent += createIssueItem(issue);
+  for (const label of sortedLabels) {
+    readmeContent += `## ${label === 'default' ? 'Unlabeled Issues' : label} 🏷️\n`; 
+
+    for (const issue of issuesByLabel[label]) {
       readmeContent += createIssueItem(issue);
     }
 
-    readmeContent += `\n`;
+    readmeContent += `\n---\n\n`;
   }
-
 
   fs.access(readmePath, fs.constants.F_OK, (err) => {
     if (!err) {
@@ -61,12 +68,12 @@ async function updateReadme(repoPath) {
           console.error('Error deleting the file:', err);
           return;
         }
-        createFile(readmePath, readmeContent)
+        createFile(readmePath, readmeContent);
       });
     } else {
-      createFile(readmePath, readmeContent)
+      createFile(readmePath, readmeContent);
     }
-  })
+  });
 }
 
 async function fetchIssues(repo) {
@@ -97,9 +104,9 @@ function createFile(filePath, content) {
 }
 
 function createIssueItem(issue) {
-  const { title, number, html_url, labels } = issue;
+  const { title, html_url, labels } = issue;
   const iconWithLabels = createIcon(labels, [...icons]);
-  return `- ${iconWithLabels} [${title}](${html_url}) (#${number})\n`
+  return `- ${iconWithLabels} [${title}](${html_url})\n`
 }
 
 function createIcon(labels, icons) {
@@ -125,7 +132,7 @@ function createIcon(labels, icons) {
         icons.splice(randomIndex, 1);
       } else {
         usedLabels.set(id, defaultIcon);
-        displayIcons =+ defaultIcon
+        displayIcons = + defaultIcon
       }
     }
   }
