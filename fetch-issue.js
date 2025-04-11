@@ -28,9 +28,31 @@ async function updateReadme(repoPath) {
 
   let readmeContent = `# ${repoPath}\n`;
 
+  let issuesByLabel = {};
+
   for (const issue of issues) {
-    readmeContent += createIssueItem(issue);
+    for (const label of issue.labels) {
+      const labelName = label.name;
+      if (issuesByLabel[labelName]) {
+        issuesByLabel[labelName].push(issue);
+      } else {
+        issuesByLabel[labelName] = [issue]
+      }
+    }
   }
+
+  for (const [label, labelIssues] of Object.entries(issuesByLabel)) {
+    readmeContent += `## ${label}\n`;
+
+    for (const issue of labelIssues) {
+    readmeContent += createIssueItem(issue);
+    readmeContent += createIssueItem(issue);
+      readmeContent += createIssueItem(issue);
+    }
+
+    readmeContent += `\n`;
+  }
+
 
   fs.access(readmePath, fs.constants.F_OK, (err) => {
     if (!err) {

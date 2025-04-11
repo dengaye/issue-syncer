@@ -20,7 +20,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        npm install axios
+        npm install
 
     - name: Fetch Issues and Update README
       env:
@@ -28,7 +28,7 @@ jobs:
         GIT_USERNAME: ${{ secrets.GIT_USERNAME }}
         REPO_NAMES: ${{ secrets.REPO_NAMES }}
       run: |
-        node fetch-issue.js
+        npm run build
 
     - name: Update target repositories
       env:
