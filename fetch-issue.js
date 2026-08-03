@@ -14,6 +14,12 @@ const repos = (process.env.REPO_NAMES || "")
   .map((name) => name.trim())
   .filter(Boolean);
 
+const githubHeaders = {
+  Authorization: `Bearer ${token}`,
+  Accept: "application/vnd.github.v3+json",
+  "User-Agent": "issue-syncer",
+};
+
 async function main() {
   for (const item of repos) {
     usedLabels = new Map();
@@ -21,12 +27,6 @@ async function main() {
     await updateReadme(item);
   }
 }
-
-main().catch((error) => {
-  console.error("Fatal error:", error);
-  process.exit(1);
-});
-
 async function updateReadme(repoPath) {
   const [issues, repoMeta] = await Promise.all([
     fetchIssues(repoPath),
@@ -205,12 +205,6 @@ function getCategoryIcon(labelKey, labelIssues) {
   return theme.defaultIcon;
 }
 
-const githubHeaders = {
-  Authorization: `Bearer ${token}`,
-  Accept: "application/vnd.github.v3+json",
-  "User-Agent": "issue-syncer",
-};
-
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -309,3 +303,8 @@ function assignStableIcons(issues) {
     );
   });
 }
+
+main().catch((error) => {
+  console.error("Fatal error:", error);
+  process.exit(1);
+});
