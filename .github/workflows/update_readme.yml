@@ -11,12 +11,12 @@ jobs:
 
     steps:
     - name: Checkout this repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
-        node-version: '14'
+        node-version: '20'
 
     - name: Install dependencies
       run: |
@@ -41,8 +41,7 @@ jobs:
         do
           echo "Updating $repo"
 
-          # Use the same temporary directory
-          git clone https://$GIT_USERNAME:$ISSUSE_TOKEN@github.com/$GIT_USERNAME/$repo.git $repo
+          git clone --depth 1 https://$GIT_USERNAME:$ISSUSE_TOKEN@github.com/$GIT_USERNAME/$repo.git $repo
           
           # Copy the updated README.md from the temporary directory to the cloned repository
           cp ${repo}_README.md $repo/README.md

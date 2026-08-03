@@ -1,6 +1,5 @@
 const axios = require("axios");
-const fs = require("fs");
-const https = require("https");
+const fs = require("fs").promises;
 const path = require("path");
 
 const icons = ["✂️", "🌱", "👯", "❄️", "📫", "🎅", "🍁", "🛀", "🍃", "🎃", "👻"];
@@ -9,29 +8,41 @@ let usedLabels = new Map();
 
 const token = process.env.ISSUSE_TOKEN;
 const owner = process.env.GIT_USERNAME;
-const repos = (process.env.REPO_NAMES || "").split(";");
+const repos = (process.env.REPO_NAMES || "")
+  .split(";")
+  .map((name) => name.trim())
+  .filter(Boolean);
 
-function main() {
-  repos.forEach(item => {
+async function main() {
+  for (const item of repos) {
     usedLabels = new Map();
-    updateReadme(item)
-  });
+    await updateReadme(item);
+  }
 }
 
-main();
+main().catch((error) => {
+  console.error("Fatal error:", error);
+  process.exit(1);
+});
 
 async function updateReadme(repoPath) {
   const issues = await fetchIssues(repoPath);
   if (!issues) return;
 
+  assignStableIcons(issues);
+
   const readmePath = path.join(__dirname, `${repoPath}_README.md`);
+  const openCount = issues.filter((issue) => issue.state === "open").length;
+  const closedCount = issues.length - openCount;
 
   let readmeContent = `# ${repoPath} 📖\n`;
   readmeContent += `### Issue Summary\n`;
   readmeContent += `- Total Issues: ${issues.length} 📝\n`;
-  readmeContent += `- Unlabeled Issues: ${issues.filter(issue => !issue.labels?.length).length} ❓\n\n`;
+  readmeContent += `- Open: ${openCount} 🟢\n`;
+  readmeContent += `- Closed: ${closedCount} 🔴\n`;
+  readmeContent += `- Unlabeled Issues: ${issues.filter((issue) => !issue.labels?.length).length} ❓\n\n`;
 
-  let issuesByLabel = {};
+  const issuesByLabel = {};
 
   for (const issue of issues) {
     if (!issue.labels?.length) {
@@ -52,37 +63,22 @@ async function updateReadme(repoPath) {
   const sortedLabels = Object.keys(issuesByLabel).sort();
 
   for (const label of sortedLabels) {
-    readmeContent += `## ${label === 'default' ? 'Unlabeled Issues' : label} 🏷️\n`; 
+    readmeContent += `## ${label === "default" ? "Unlabeled Issues" : label} 🏷️\n`;
 
-    for (const issue of issuesByLabel[label]) {
+    const sortedIssues = issuesByLabel[label].sort((a, b) => b.number - a.number);
+    for (const issue of sortedIssues) {
       readmeContent += createIssueItem(issue);
     }
 
     readmeContent += `\n---\n\n`;
   }
 
-  fs.access(readmePath, fs.constants.F_OK, (err) => {
-    if (!err) {
-      fs.unlink(readmePath, (err) => {
-        if (err) {
-          console.error('Error deleting the file:', err);
-          return;
-        }
-        createFile(readmePath, readmeContent);
-      });
-    } else {
-      createFile(readmePath, readmeContent);
-    }
-  });
+  await fs.writeFile(readmePath, readmeContent);
+  console.log("File created successfully:", readmePath);
 }
 
 async function fetchIssues(repo) {
   try {
-    const httpsAgent = new https.Agent({
-      rejectUnauthorized: false,
-    });
-    axios.defaults.httpsAgent = httpsAgent;
-
     const allIssues = [];
     const perPage = 100;
     let page = 1;
@@ -103,53 +99,34 @@ async function fetchIssues(repo) {
     // GitHub Issues API 会把 PR 一并返回，这里只保留真正的 Issue
     return allIssues.filter((issue) => !issue.pull_request);
   } catch (error) {
-    console.error('Error fetching issues:', error);
-    return '';
+    console.error("Error fetching issues:", error);
+    return "";
   }
 }
 
-function createFile(filePath, content) {
-  fs.writeFile(filePath, content, (err) => {
-    if (err) {
-      console.error('Error creating the file:', err);
-      return;
+function assignStableIcons(issues) {
+  const uniqueLabels = new Map();
+  for (const issue of issues) {
+    for (const label of issue.labels || []) {
+      uniqueLabels.set(label.id, label);
     }
-    console.log('File created successfully:', filePath);
+  }
+
+  const sortedLabels = [...uniqueLabels.values()].sort((a, b) => a.id - b.id);
+  sortedLabels.forEach((label, index) => {
+    usedLabels.set(label.id, index < icons.length ? icons[index] : defaultIcon);
   });
 }
 
 function createIssueItem(issue) {
-  const { title, html_url, labels } = issue;
-  const iconWithLabels = createIcon(labels, [...icons]);
-  return `- ${iconWithLabels} [${title}](${html_url})\n`
+  const { title, html_url, labels, state } = issue;
+  const stateIcon = state === "open" ? "🟢" : "🔴";
+  const iconWithLabels = createIcon(labels);
+  const labelIcons = iconWithLabels ? ` ${iconWithLabels}` : "";
+  return `- ${stateIcon}${labelIcons} [${title}](${html_url})\n`;
 }
 
-function createIcon(labels, icons) {
-  if (!labels.length) return '';
-  const iconLength = icons.length;
-  const labelLength = labels.length;
-  /** 会有多个 icon */
-  let displayIcons = '';
-  for (const label of labels) {
-    const { id } = label;
-    const icon = usedLabels.get(id);
-    if (icon) {
-      /** 如果已匹配 icon, 直接使用 */
-      displayIcons += `${icon}`;
-    } else {
-      if (iconLength >= labelLength) {
-        /** 随机选择一个 icon */
-        const randomIndex = Math.floor(Math.random() * icons.length);
-        const newIcon = icons[randomIndex];
-        displayIcons += newIcon;
-        usedLabels.set(id, newIcon);
-        /** 移除 */
-        icons.splice(randomIndex, 1);
-      } else {
-        usedLabels.set(id, defaultIcon);
-        displayIcons = + defaultIcon
-      }
-    }
-  }
-  return displayIcons;
+function createIcon(labels) {
+  if (!labels.length) return "";
+  return labels.map((label) => usedLabels.get(label.id) || defaultIcon).join("");
 }
