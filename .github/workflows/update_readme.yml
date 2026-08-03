@@ -37,23 +37,30 @@ jobs:
         REPO_NAMES: ${{ secrets.REPO_NAMES }}
       run: |
         IFS=';' read -r -a repoArray <<< "$REPO_NAMES"
-        for repo in "${repoArray[@]}"
+        for rawRepo in "${repoArray[@]}"
         do
+          repo="$(echo "$rawRepo" | xargs)"
+          if [ -z "$repo" ]; then
+            continue
+          fi
+
+          if [ ! -f "${repo}_README.md" ]; then
+            echo "Skip $repo: ${repo}_README.md not found (fetch may have failed)"
+            continue
+          fi
+
           echo "Updating $repo"
 
           git clone --depth 1 https://$GIT_USERNAME:$ISSUSE_TOKEN@github.com/$GIT_USERNAME/$repo.git $repo
-          
-          # Copy the updated README.md from the temporary directory to the cloned repository
-          cp ${repo}_README.md $repo/README.md
-          
-          # Commit and push changes in the target repository
-          cd $repo
+
+          cp "${repo}_README.md" "$repo/README.md"
+
+          cd "$repo"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
           git commit -m "Update README with issue information" || echo "No changes to commit"
           git push
 
-          # Return to the previous directory and continue
           cd -
         done
