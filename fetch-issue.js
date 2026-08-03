@@ -80,13 +80,28 @@ async function fetchIssues(repo) {
   try {
     const httpsAgent = new https.Agent({
       rejectUnauthorized: false,
-    })
-    axios.defaults.httpsAgent = httpsAgent
-    const response = await axios.get(`https://api.github.com/repos/${owner}/${repo}/issues`, {
-      headers: { Authorization: `token ${token}`, Accept: "application/vnd.github.v3+json" }
     });
+    axios.defaults.httpsAgent = httpsAgent;
 
-    return response.data;
+    const allIssues = [];
+    const perPage = 100;
+    let page = 1;
+
+    while (true) {
+      const response = await axios.get(`https://api.github.com/repos/${owner}/${repo}/issues`, {
+        headers: { Authorization: `token ${token}`, Accept: "application/vnd.github.v3+json" },
+        params: { state: "all", per_page: perPage, page },
+      });
+
+      const pageIssues = response.data;
+      allIssues.push(...pageIssues);
+
+      if (pageIssues.length < perPage) break;
+      page++;
+    }
+
+    // GitHub Issues API 会把 PR 一并返回，这里只保留真正的 Issue
+    return allIssues.filter((issue) => !issue.pull_request);
   } catch (error) {
     console.error('Error fetching issues:', error);
     return '';
